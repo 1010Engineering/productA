@@ -2,8 +2,8 @@
  *                        1010 INNOVATION LABS                         *
  * AUTHOR:   Alec Selfridge                                            *
  * PROJECT:  Solar-Powered Armband                                     *
- * VERSION:  1.0                                                       *
- * REVISION: 02/20/2016                                                *
+ * VERSION:  1.1                                                       *
+ * REVISION: 02/25/2016                                                *
  * NOTES:    Target device: ATTINY85 (Trinket 8MHZ/USBTinyISP)         *
  *           Two NeoPixels, connected to the same pin, may be          *
  *           configured by a push-button connected to another pin.     *
@@ -11,6 +11,7 @@
  *           of the first low-to-high transition with a later reading. *
  *           If the input was HIGH in both cases, then we accept the   *
  *           input and cycle modes.                                    *
+ *           V1.1: added CDS cell and non-blocking delays              *
  *                                                                     *
  * No part of this document may be used, distributed, or reproduced    *
  * without written permission from its author.                         *
@@ -30,7 +31,7 @@ int findMax(int array[]);
 #define OFF    false
 #define DEFAULT_STATE {RED[0], RED[1], RED[2]}
 #define T_rf       500
-#define CDS_CUTOFF 25
+#define CDS_CUTOFF 250
 #define CDS_DELAY  15
 
 // brightness options
@@ -45,14 +46,14 @@ int findMax(int array[]);
 // pin assignments
 #define LED_PIN    0
 #define BTN_PIN    1
-#define CDS_PIN    2
+#define CDS_PIN    1 //analog1 - pin #2
 
 // state machine variables
 unsigned char currentMode  = 0;
 unsigned char lightState[] = DEFAULT_STATE;
 int           btnState;
 bool          blinkStage   = OFF;
-bool          lightEn      = OFF;
+bool          lightEN      = OFF;
 int           lastBtnState = LOW;
 long          lastDbTime   = 0;
 long          dbDelay      = 20;
@@ -92,30 +93,34 @@ void loop() {
       timeOld = millis();
       maxVal = findMax(sensorReads);
       if(maxVal < CDS_CUTOFF) 
-        lightEn = ON;
+        lightEN = ON;
       else
-        lightEn = OFF;  
+        lightEN = OFF; 
       count = 0;
     }
   }
   // light refresh handling
   if((millis() - prevTime) > T_rf) {
-    if(lightEn == OFF) {
-      lights.clear(); lights.show();
+    prevTime = millis(); blinkStage = !blinkStage;
+    // light enable based on the ambient light...like an auto switch
+    if(lightEN == OFF) {
+      //lights.clear(); lights.show();
+      digitalWrite(LED_PIN, LOW);
     }
     else {
-      prevTime = millis(); blinkStage = !blinkStage;
       if(blinkStage) { // on cycle
-        setLights();
+        /*setLights();
         lights.setPixelColor(0, lightState[0], lightState[1], lightState[2]);
         lights.setPixelColor(1, lightState[0], lightState[1], lightState[2]);
-        lights.show();
+        lights.show();*/
+        digitalWrite(LED_PIN, HIGH);
       }
       else { // off cycle
-        lightState[0] = 0; lightState[1] = 0; lightState[2] = 0;
+        /*lightState[0] = 0; lightState[1] = 0; lightState[2] = 0;
         lights.setPixelColor(0, lightState[0], lightState[1], lightState[2]);
         lights.setPixelColor(1, lightState[0], lightState[1], lightState[2]);
-        lights.show();
+        lights.show();*/
+        digitalWrite(LED_PIN, LOW);
       }
     }
   }
@@ -173,6 +178,7 @@ void debounceRead(int pin) {
   lastBtnState = reading;
 }
 
+// finds the maximum of an arbitrary-length array
 int findMax(int array[]){
   char i;
   int big = array[0];
